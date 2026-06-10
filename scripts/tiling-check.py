@@ -27,7 +27,16 @@ Usage:
 """
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # [emberlock] Windows has no fcntl; advisory locking is
+    # delegated to the bash layer (wiki-lock.sh) + single-writer curator.
+    class _NoFcntl:
+        LOCK_EX = LOCK_NB = LOCK_UN = 0
+        @staticmethod
+        def flock(fd, op):
+            return None
+    fcntl = _NoFcntl()
 import hashlib
 import json
 import math
