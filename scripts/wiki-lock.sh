@@ -76,7 +76,7 @@
 
 set -euo pipefail
 
-VAULT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VAULT_ROOT="${VAULT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 META_DIR="${VAULT_ROOT}/.vault-meta"
 LOCK_DIR="${META_DIR}/locks"
 META_LOCK="${META_DIR}/.wiki-lock.meta"
@@ -151,11 +151,29 @@ is_alive() {
 # acquire/release/clear-stale don't race against each other.
 with_meta_lock() {
   ensure_dirs
-  # Use flock under bash's redirect; meta lock is short-lived per command.
-  (
-    flock -x -w 5 9 || die "could not acquire meta-lock within 5s" 1
+  if command -v flock >/dev/null 2>&1; then
+    # Use flock under bash's redirect; meta lock is short-lived per command.
+    (
+      flock -x -w 5 9 || die "could not acquire meta-lock within 5s" 1
+      "$@"
+    ) 9>"$META_LOCK"
+  else
+    # [emberlock] Git Bash on Windows ships no flock(1). mkdir is atomic on
+    # NTFS: spin on it, steal if older than 10s (meta sections are sub-second),
+    # clean up via EXIT trap so die()-paths inside "$@" cannot leak the lock.
+    local d="${META_LOCK}.d" i=0
+    until mkdir "$d" 2>/dev/null; do
+      if [ -d "$d" ]; then
+        local now mt
+        now=$(date +%s); mt=$(stat -c %Y "$d" 2>/dev/null || echo "$now")
+        if [ $(( now - mt )) -gt 10 ]; then rmdir "$d" 2>/dev/null && continue; fi
+      fi
+      i=$((i+1)); [ "$i" -ge 120 ] && die "could not acquire meta-lock within 12s" 1
+      sleep 0.1
+    done
+    trap 'rmdir "'"$d"'" 2>/dev/null' EXIT
     "$@"
-  ) 9>"$META_LOCK"
+  fi
 }
 
 read_lockfile() {

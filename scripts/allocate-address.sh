@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-VAULT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VAULT_ROOT="${VAULT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 COUNTER_FILE="${VAULT_ROOT}/.vault-meta/address-counter.txt"
 LOCK_FILE="${VAULT_ROOT}/.vault-meta/.address.lock"
 WIKI_DIR="${VAULT_ROOT}/wiki"
@@ -32,10 +32,28 @@ mkdir -p "$(dirname "$COUNTER_FILE")" || {
 }
 
 # Acquire exclusive lock with 5-second timeout. Release automatically on scope exit.
-exec 9>"$LOCK_FILE"
-if ! flock -x -w 5 9; then
-  echo "ERR: could not acquire address allocator lock within 5s" >&2
-  exit 1
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK_FILE"
+  if ! flock -x -w 5 9; then
+    echo "ERR: could not acquire address allocator lock within 5s" >&2
+    exit 1
+  fi
+else
+  # [emberlock] no flock(1) on Git Bash/Windows: mkdir-spinlock + EXIT trap.
+  _ALLOC_LOCK_D="${LOCK_FILE}.d"; _i=0
+  until mkdir "$_ALLOC_LOCK_D" 2>/dev/null; do
+    if [ -d "$_ALLOC_LOCK_D" ]; then
+      _now=$(date +%s); _mt=$(stat -c %Y "$_ALLOC_LOCK_D" 2>/dev/null || echo "$_now")
+      if [ $(( _now - _mt )) -gt 10 ]; then rmdir "$_ALLOC_LOCK_D" 2>/dev/null && continue; fi
+    fi
+    _i=$((_i+1))
+    if [ "$_i" -ge 120 ]; then
+      echo "ERR: could not acquire address allocator lock within 12s" >&2
+      exit 1
+    fi
+    sleep 0.1
+  done
+  trap 'rmdir "$_ALLOC_LOCK_D" 2>/dev/null' EXIT
 fi
 
 scan_max_c_address() {

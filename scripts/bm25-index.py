@@ -46,7 +46,16 @@ Exit codes:
 """
 
 import argparse
-import fcntl
+try:
+    import fcntl
+except ImportError:  # [emberlock] Windows has no fcntl; advisory locking is
+    # delegated to the bash layer (wiki-lock.sh) + single-writer curator.
+    class _NoFcntl:
+        LOCK_EX = LOCK_NB = LOCK_UN = 0
+        @staticmethod
+        def flock(fd, op):
+            return None
+    fcntl = _NoFcntl()
 import json
 import math
 import os
@@ -56,7 +65,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-VAULT_ROOT = Path(__file__).resolve().parent.parent
+VAULT_ROOT = Path(os.environ.get("VAULT_ROOT") or Path(__file__).resolve().parent.parent)
 META_DIR = VAULT_ROOT / ".vault-meta"
 CHUNKS_DIR = META_DIR / "chunks"
 BM25_DIR = META_DIR / "bm25"
