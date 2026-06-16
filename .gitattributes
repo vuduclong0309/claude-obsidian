@@ -1,3 +1,5 @@
 # Shell scripts must check out with LF so MSYS / git-bash can execute them
 # (a stray CR breaks the shebang and string comparisons).
 *.sh text eol=lf
+# Extensionless executable shims (e.g. bin/pyshim/python3) must also be LF.
+bin/pyshim/* text eol=lf
