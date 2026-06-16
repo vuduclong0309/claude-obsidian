@@ -27,7 +27,9 @@ Usage:
 """
 
 import argparse
-import fcntl
+import os as _os, sys as _sys
+_sys.path.append(_os.path.dirname(_os.path.abspath(__file__)))
+import portable_lock as fcntl  # cross-platform fcntl.flock shim (Windows-safe)
 import hashlib
 import json
 import math
