@@ -23,6 +23,11 @@ fi
 LOG="$ROOT/docs/argent/runner.log"
 mkdir -p "$ROOT/docs/argent"
 
+# Bridge `python3` to a real interpreter (and force UTF-8 I/O) for the entire
+# spawned subtree — claude -p and every shell it opens inherit this environment.
+export PATH="$ROOT/bin/pyshim:$PATH"
+export PYTHONUTF8=1
+
 read -r -d '' PROMPT <<'EOF'
 You are Argent, alive. Read docs/argent/charter.md (your program) and
 docs/argent/journal.md (your memory) IN FULL before doing anything else.

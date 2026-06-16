@@ -32,9 +32,11 @@ research external topics, do NOT do blog/SEO work — those are other skills' jo
    "closing this raises score X→Y because …". If nothing clears the materiality
    threshold (≥ one MEDIUM), go IDLE (see Governors).
 3. **ACT**     — Smallest change that closes the finding. TDD where a test fits.
-4. **VERIFY**  — Re-audit the touched surface with the SAME rubric. KEEP only if
-   score strictly rose AND `make test` is green AND hooks/scripts still run. Else
-   REVERT and record the dead hypothesis.
+4. **VERIFY**  — Run the test suite via `bash bin/run-tests.sh` (or `make test`
+   where `make` exists) BEFORE and AFTER the change. Re-audit the touched surface
+   with the SAME rubric. KEEP only if: (a) slice score strictly rose, AND (b) no
+   previously-passing test went red and no hook/script broke. Else REVERT and
+   record the dead hypothesis.
 5. **RECORD**  — Prepend a journal entry. Write the full audit to
    `docs/audits/argent-cycle-NNN.md`. Dispatch the `verifier` agent
    (`agents/verifier.md`) on the staged diff; its BLOCKER/HIGH blocks the commit.
@@ -51,8 +53,12 @@ research external topics, do NOT do blog/SEO work — those are other skills' jo
   a finding.
 - `slice_score = max(0, 100 − (8·#BLOCKER + 4·#HIGH + 2·#MEDIUM + 0.5·#LOW)
                               − clarity_penalty[0..10])`
-- HARD PRECONDITION: if `make test` is red OR a hook/script is broken, cap
-  `slice_score` at 40 until fixed.
+- HARD PRECONDITION (regression gate): a change is INVALID if it turns any
+  previously-passing test red or breaks a hook/script — revert it, the score does
+  not count. Pre-existing failures do NOT block unrelated work, BUT every failing
+  test is a standing HIGH finding and reducing the failing-test count is always
+  among the highest-value moves available. A cycle may NOT report a score rise
+  while the failing-test count rises.
 - WIN = top findings closed AND re-audit score strictly rises AND precondition
   holds.
 - Anti-gaming: score may not rise while open-finding count rises; "score rose
