@@ -19,7 +19,7 @@ higher-leverage. Test command on this box: `bash bin/run-tests.sh` (no `make`).
 - Hypothesis: 72→84 because closing F1 turns test_tiling_check + test_bm25_index + test_retrieve green (7 HIGH → 4 HIGH), no regression
 - Action: new scripts/portable_lock.py (fcntl shim: POSIX re-export / Windows msvcrt emulation, NB→BlockingIOError); each `import fcntl` → sys.path bootstrap + `import portable_lock as fcntl` (no call-site changed); test_retrieve sandbox-copy lists (4 sites) gained portable_lock.py | files: scripts/portable_lock.py, scripts/{tiling-check,bm25-index,rerank}.py, tests/test_retrieve.py
 - Verify: score after 84 (Δ+12) | tests: 5 passed/4 failed (was 2/7), no previously-green test red | verifier: 0 BLOCKER / 0 HIGH → SHIP (2 MEDIUM + 1 LOW deferred)
-- Result: KEPT @ <sha after commit>
+- Result: KEPT @ 1d8c642
 - Open threads: F2 — portable bash lock for wiki-lock.sh:156 / allocate-address.sh (closes test_wiki_lock + test_concurrent_write, 2 tests); F3 — guard symlink assertion at test_boundary_score.py:242 when symlinks unprivileged on Windows (1 test); M1 (verifier) — portable_lock.py:67 blocking LOCK_EX spin-loop has no timeout (parity w/ POSIX flock, but add _BLOCK_TIMEOUT_SEC); M2 (verifier) — no hermetic tests/test_portable_lock.py for the Windows emulation branch
 - Dead ends: none
 
