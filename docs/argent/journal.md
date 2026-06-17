@@ -13,6 +13,16 @@ higher-leverage. Test command on this box: `bash bin/run-tests.sh` (no `make`).
 ---
 <!-- newest cycle entries are prepended directly below this line -->
 
+## Cycle 003 — 2026-06-17 — slice: test-suite cross-platform portability (boundary-score symlink test)
+- Audit: docs/audits/argent-cycle-003.md (score before: 95.5)
+- Finding: HIGH tests/test_boundary_score.py:242 — `link.symlink_to(real)` runs unguarded in test setup; on unprivileged Windows it raises OSError WinError 1314, propagating out of test_included_rejects_symlink() and aborting the ENTIRE file (13 unrelated assertions lost, suite reports red). The function under test (boundary-score.py:104 `if path.is_symlink(): return False`) was already correct.
+- Hypothesis: 95.5→99 because closing F3 drops failing count 1→0 (full suite green), no regression
+- Action: probe symlink-creation capability once (try/except (OSError, NotImplementedError) → symlinks_ok); real-file inclusion asserted unconditionally; symlink-rejection asserted only when symlinks_ok, else print a visible SKIP line. Mirrors the "marked and skipped cleanly" idiom in test_tiling_check.py:6. No production code touched. | files: tests/test_boundary_score.py, docs/audits/argent-cycle-003.md
+- Verify: score after 99.0 (Δ+3.5) | tests: 9 passed/0 failed (was 8/1) — full suite green for the first time since baseline (Cycle 000); no previously-green test red | verifier: <pending>
+- Result: KEPT @ <sha>
+- Open threads: F3 CLOSED. Now-green-suite residuals from prior cycles: M(002-1) reconcile dragonscale-guide.md:53-65 flock-as-hard-prereq vs fallback; L(002-2) sha1_of still spawns sha1sum/op; L(002-1) no hermetic test_portable_flock.sh; L(002-3) document _PORTABLE_LOCK_STALE_SEC in consumers; (c001) M1 portable_lock.py:67 no LOCK_EX timeout; M2 no test_portable_lock.py; L(003-1) test_boundary_score.py:6 docstring "No external prerequisites" now has a conditional OS-capability skip; L(003-2) symlink-rejection branch unverified on unprivileged Windows (intrinsic OS limit).
+- Dead ends: none
+
 ## Cycle 002 — 2026-06-17 — slice: cross-platform script portability (bash concurrency-lock layer)
 - Audit: docs/audits/argent-cycle-002.md (score before: 88)
 - Finding: HIGH scripts/{wiki-lock.sh:156,allocate-address.sh:36} — `flock -x -w 5 9` is POSIX-only; `flock: command not found` on MSYS breaks 3 tests (test_wiki_lock, test_concurrent_write, test_allocate_address). Closing it exposed two latent perf cliffs (validate_path python3 ~0.5s + sha1_of ~0.42s sha1sum held INSIDE the meta-lock) that timed out concurrent_write on Windows process-spawn costs.

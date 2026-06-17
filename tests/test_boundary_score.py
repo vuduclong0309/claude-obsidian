@@ -239,15 +239,27 @@ def test_included_rejects_symlink():
         real = wiki / "real.md"
         real.write_text("---\ntype: concept\n---\nbody\n")
         link = wiki / "link.md"
-        link.symlink_to(real)
+        # Creating a symlink needs privilege on Windows (WinError 1314 when
+        # neither admin nor Developer Mode is on). Probe once; skip only the
+        # symlink-specific assertion when unsupported — never the whole file,
+        # since the real-file branch carries its own coverage.
+        try:
+            link.symlink_to(real)
+            symlinks_ok = True
+        except (OSError, NotImplementedError):
+            symlinks_ok = False
 
         original_root = bs.VAULT_ROOT
         bs.VAULT_ROOT = tmp
         try:
-            ok_real = bs.included(real, {"type": "concept"})
-            ok_link = bs.included(link, {"type": "concept"})
-            assert_true("real file included", ok_real)
-            assert_eq("symlink excluded", False, ok_link)
+            assert_true("real file included",
+                        bs.included(real, {"type": "concept"}))
+            if symlinks_ok:
+                assert_eq("symlink excluded", False,
+                          bs.included(link, {"type": "concept"}))
+            else:
+                print("SKIP symlink excluded "
+                      "(symlink creation unprivileged on this host)")
         finally:
             bs.VAULT_ROOT = original_root
 
