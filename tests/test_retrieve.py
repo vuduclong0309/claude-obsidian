@@ -149,7 +149,7 @@ def test_retrieve_exits_10_without_index():
         (sandbox / ".vault-meta").mkdir()
         # Copy retrieve.py and its dependencies into the sandbox
         import shutil
-        for f in ["retrieve.py", "bm25-index.py", "rerank.py"]:
+        for f in ["retrieve.py", "bm25-index.py", "rerank.py", "portable_lock.py"]:
             shutil.copy(ROOT / "scripts" / f, sandbox / "scripts" / f)
             os.chmod(sandbox / "scripts" / f, 0o755)
         # Run retrieve.py — should exit 10 because no bm25 index exists
@@ -179,7 +179,7 @@ def test_end_to_end_with_synthetic_chunks():
         bm25_dir.mkdir(parents=True)
         # Copy scripts
         import shutil
-        for f in ["retrieve.py", "bm25-index.py", "rerank.py"]:
+        for f in ["retrieve.py", "bm25-index.py", "rerank.py", "portable_lock.py"]:
             shutil.copy(ROOT / "scripts" / f, sandbox / "scripts" / f)
             os.chmod(sandbox / "scripts" / f, 0o755)
         # Write 2 synthetic chunks
@@ -238,7 +238,7 @@ def test_explain_flag_adds_diagnostics_block():
         chunks_dir.mkdir(parents=True)
         bm25_dir.mkdir(parents=True)
         import shutil
-        for f in ["retrieve.py", "bm25-index.py", "rerank.py"]:
+        for f in ["retrieve.py", "bm25-index.py", "rerank.py", "portable_lock.py"]:
             shutil.copy(ROOT / "scripts" / f, sandbox / "scripts" / f)
             os.chmod(sandbox / "scripts" / f, 0o755)
         # 2 synthetic chunks
@@ -284,7 +284,7 @@ def test_no_rerank_flag_strategy_bm25_only():
         chunks_dir.mkdir(parents=True)
         bm25_dir.mkdir(parents=True)
         import shutil
-        for f in ["retrieve.py", "bm25-index.py", "rerank.py"]:
+        for f in ["retrieve.py", "bm25-index.py", "rerank.py", "portable_lock.py"]:
             shutil.copy(ROOT / "scripts" / f, sandbox / "scripts" / f)
             os.chmod(sandbox / "scripts" / f, 0o755)
         (chunks_dir / "c-000020").mkdir()

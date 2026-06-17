@@ -1,14 +1,16 @@
 # claude-obsidian Makefile
 # Test runner entry points for DragonScale and vault tooling.
 
-.PHONY: test test-address test-tiling test-boundary test-bm25 test-retrieve \
-        test-lock test-concurrent test-mode test-contextual setup-dragonscale \
+.PHONY: test test-address test-portable-lock test-tiling test-boundary \
+        test-bm25 test-retrieve test-lock test-concurrent test-mode \
+        test-contextual setup-dragonscale \
         setup-retrieve setup-mode clean-test-state help
 
 help:
 	@echo "claude-obsidian developer targets:"
 	@echo "  make test              Run all v1.7 tests (DragonScale + retrieval + concurrency)"
 	@echo "  make test-address     scripts/allocate-address.sh tests (shell)"
+	@echo "  make test-portable-lock scripts/portable_lock.py shim tests (python, hermetic)"
 	@echo "  make test-tiling      scripts/tiling-check.py tests (python, no ollama required)"
 	@echo "  make test-boundary    scripts/boundary-score.py tests (python, no prereqs)"
 	@echo "  make test-bm25        scripts/bm25-index.py tests (python, hermetic)"
@@ -22,13 +24,17 @@ help:
 	@echo "  make setup-mode       Run bin/setup-mode.sh to pick a methodology mode (opt-in v1.8)"
 	@echo "  make clean-test-state Remove runtime lockfiles and tiling/embed caches"
 
-test: test-address test-tiling test-boundary test-bm25 test-retrieve test-lock test-concurrent test-mode test-contextual
+test: test-address test-portable-lock test-tiling test-boundary test-bm25 test-retrieve test-lock test-concurrent test-mode test-contextual
 	@echo ""
 	@echo "All tests passed."
 
 test-address:
 	@echo "=== test_allocate_address.sh ==="
 	@bash tests/test_allocate_address.sh
+
+test-portable-lock:
+	@echo "=== test_portable_lock.py ==="
+	@python3 tests/test_portable_lock.py
 
 test-tiling:
 	@echo "=== test_tiling_check.py ==="

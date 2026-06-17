@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Repo-local `python3` bridge.
+#
+# On some Windows boxes the bare `python3` name resolves to the non-functional
+# Microsoft Store shim ("Python was not found...") while a real interpreter is
+# installed and reachable as `python` or `py`. Prepend this directory to PATH and
+# hardcoded `python3 ...` calls in the repo's scripts/tests resolve to the real
+# interpreter — without mutating any global PATH, alias, or registry state.
+#
+# Transparent passthrough where a working `python3` already exists elsewhere.
+set -u
+# Force UTF-8 I/O: Windows Python defaults stdout to cp1252, which crashes on the
+# Unicode (e.g. U+2192 "->") that the repo's scripts and tests print.
+export PYTHONUTF8=1
+export PYTHONIOENCODING="utf-8"
+self="$(cd "$(dirname "$0")" && pwd)"
+for cand in python python3 py; do
+  src="$(command -v "$cand" 2>/dev/null || true)"
+  [ -n "$src" ] || continue
+  case "$src" in
+    "$self/"*)     continue ;;   # never recurse into this shim
+    *WindowsApps*) continue ;;   # skip the Microsoft Store stub
+  esac
+  if [ "$cand" = "py" ]; then exec "$src" -3 "$@"; else exec "$src" "$@"; fi
+done
+echo "python3 (repo shim): no working Python interpreter found on PATH" >&2
+exit 127
