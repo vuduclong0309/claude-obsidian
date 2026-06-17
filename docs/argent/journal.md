@@ -18,8 +18,8 @@ higher-leverage. Test command on this box: `bash bin/run-tests.sh` (no `make`).
 - Finding: HIGH tests/test_boundary_score.py:242 — `link.symlink_to(real)` runs unguarded in test setup; on unprivileged Windows it raises OSError WinError 1314, propagating out of test_included_rejects_symlink() and aborting the ENTIRE file (13 unrelated assertions lost, suite reports red). The function under test (boundary-score.py:104 `if path.is_symlink(): return False`) was already correct.
 - Hypothesis: 95.5→99 because closing F3 drops failing count 1→0 (full suite green), no regression
 - Action: probe symlink-creation capability once (try/except (OSError, NotImplementedError) → symlinks_ok); real-file inclusion asserted unconditionally; symlink-rejection asserted only when symlinks_ok, else print a visible SKIP line. Mirrors the "marked and skipped cleanly" idiom in test_tiling_check.py:6. No production code touched. | files: tests/test_boundary_score.py, docs/audits/argent-cycle-003.md
-- Verify: score after 99.0 (Δ+3.5) | tests: 9 passed/0 failed (was 8/1) — full suite green for the first time since baseline (Cycle 000); no previously-green test red | verifier: <pending>
-- Result: KEPT @ <sha>
+- Verify: score after 99.0 (Δ+3.5) | tests: 9 passed/0 failed (was 8/1) — full suite green for the first time since baseline (Cycle 000); no previously-green test red | verifier: 0 BLOCKER / 0 HIGH → SHIP (1 MEDIUM doc-typo fixed pre-commit; try/except scope confirmed bounded, no masking of real bugs in included())
+- Result: KEPT @ 43f24dc
 - Open threads: F3 CLOSED. Now-green-suite residuals from prior cycles: M(002-1) reconcile dragonscale-guide.md:53-65 flock-as-hard-prereq vs fallback; L(002-2) sha1_of still spawns sha1sum/op; L(002-1) no hermetic test_portable_flock.sh; L(002-3) document _PORTABLE_LOCK_STALE_SEC in consumers; (c001) M1 portable_lock.py:67 no LOCK_EX timeout; M2 no test_portable_lock.py; L(003-1) test_boundary_score.py:6 docstring "No external prerequisites" now has a conditional OS-capability skip; L(003-2) symlink-rejection branch unverified on unprivileged Windows (intrinsic OS limit).
 - Dead ends: none
 
