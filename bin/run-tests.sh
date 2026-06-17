@@ -13,6 +13,7 @@ export PATH="$ROOT/bin/pyshim:$PATH"
 
 TESTS=(
   "bash tests/test_allocate_address.sh"
+  "python3 tests/test_portable_lock.py"
   "python3 tests/test_tiling_check.py"
   "python3 tests/test_boundary_score.py"
   "python3 tests/test_bm25_index.py"
