@@ -76,11 +76,18 @@
 
 set -euo pipefail
 
-VAULT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# ${BASH_SOURCE[0]%/*} is dirname via parameter expansion — no dirname(1) spawn
+# (~350ms on MSYS). The script is always invoked with a path containing '/'.
+VAULT_ROOT="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd)"
 META_DIR="${VAULT_ROOT}/.vault-meta"
 LOCK_DIR="${META_DIR}/locks"
 META_LOCK="${META_DIR}/.wiki-lock.meta"
 STALE_AFTER_SEC=60
+
+# Cross-platform exclusive lock (flock(1) where present, noclobber-file spin-lock
+# on MSYS/git-bash where it is not). See scripts/portable-flock.sh.
+# shellcheck source=scripts/portable-flock.sh
+. "${BASH_SOURCE[0]%/*}/portable-flock.sh"
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 die() { echo "ERR: $*" >&2; exit "${2:-2}"; }
@@ -95,15 +102,22 @@ if [ -n "${WIKI_LOCK_VAULT:-}" ]; then
 fi
 
 sha1_of() {
+  # Strip the trailing "  -" with parameter expansion instead of piping to awk
+  # (one fewer ~350ms subprocess spawn on the lock hot path).
+  local out
   if command -v sha1sum >/dev/null 2>&1; then
-    printf '%s' "$1" | sha1sum | awk '{print $1}'
+    out=$(printf '%s' "$1" | sha1sum)
   else
     # macOS fallback
-    printf '%s' "$1" | shasum -a 1 | awk '{print $1}'
+    out=$(printf '%s' "$1" | shasum -a 1)
   fi
+  printf '%s' "${out%% *}"
 }
 
 ensure_dirs() {
+  # Cheap guard: skip the mkdir(1) spawn when the dir already exists (this is
+  # called on every command, often twice — once here, once via with_meta_lock).
+  [ -d "$LOCK_DIR" ] && return 0
   mkdir -p "$LOCK_DIR" 2>/dev/null || die "cannot create $LOCK_DIR" 3
 }
 
@@ -121,8 +135,27 @@ validate_path() {
     *$'\n'*) die "path may not contain newlines (lockfile format would break)" 4 ;;
     *$'\r'*) die "path may not contain carriage returns" 4 ;;
   esac
-  # Symlink canonicalization (only when the path or one of its parents exists).
-  # Non-existent paths can pass; the lock acquire itself creates leaves under
+  # Fast path: the rigorous symlink resolve below spawns python3 (~0.5s+ on
+  # Windows), which is far too costly on the per-acquire hot path (a 10-worker
+  # stress test issues hundreds of acquires — see tests/test_concurrent_write.sh).
+  # It is only needed when a symlink can redirect the path outside the vault.
+  # Since absolute paths and '..' are already rejected above, a candidate whose
+  # existing ancestors are all real (non-symlink) directories resolves lexically
+  # to <vault>/<candidate>, which is inside the vault by construction. So we walk
+  # the candidate's components with the cheap builtin `[ -L ]` test and only fall
+  # through to python3 when an ancestor actually IS a symlink. (Argent cycle 002.)
+  local need_resolve=0 _prefix="$VAULT_ROOT" _comp _oldifs="$IFS"
+  IFS='/'
+  for _comp in $p; do
+    [ -z "$_comp" ] && continue
+    _prefix="$_prefix/$_comp"
+    if [ -L "$_prefix" ]; then need_resolve=1; break; fi
+  done
+  IFS="$_oldifs"
+  [ "$need_resolve" -eq 0 ] && return 0
+
+  # Symlink canonicalization (only reached when an ancestor is a symlink).
+  # Non-existent leaves can pass; the lock acquire itself creates leaves under
   # LOCK_DIR, not the path itself. We resolve via python3 (portable across
   # GNU coreutils + macOS BSD where realpath flag semantics differ).
   if command -v python3 >/dev/null 2>&1; then
@@ -140,7 +173,13 @@ sys.stdout.write("INSIDE" if common == root else "OUTSIDE")
   return 0
 }
 
-now_epoch() { date +%s; }
+now_epoch() {
+  # Bash builtin epoch — no subprocess. On this lock's hot path a date(1) spawn
+  # costs ~350ms on MSYS/Windows; the builtin is free. Falls back to date(1) on
+  # bash < 4.2 where the %(...)T format is unsupported. (Argent cycle 002.)
+  local e
+  if printf -v e '%(%s)T' -1 2>/dev/null; then printf '%s\n' "$e"; else date +%s; fi
+}
 
 is_alive() {
   # kill -0 returns 0 if process exists and we can signal it
@@ -151,26 +190,33 @@ is_alive() {
 # acquire/release/clear-stale don't race against each other.
 with_meta_lock() {
   ensure_dirs
-  # Use flock under bash's redirect; meta lock is short-lived per command.
+  # Portable exclusive lock; meta lock is short-lived per command. The lock
+  # auto-releases when this subshell exits (portable_lock_acquire owns its own
+  # fd/lockdir + EXIT-trap release — see scripts/portable-flock.sh).
   (
-    flock -x -w 5 9 || die "could not acquire meta-lock within 5s" 1
+    portable_lock_acquire "$META_LOCK" 5 || die "could not acquire meta-lock within 5s" 1
     "$@"
-  ) 9>"$META_LOCK"
+  )
 }
 
 read_lockfile() {
-  # Echoes: <pid> <epoch> <path>  (or empty if file missing/unreadable)
-  local lf="$1"
+  # Echoes: <pid> <epoch> <path>  (or empty if file missing/unreadable).
+  # Uses a builtin `read` redirect — no head(1) spawn (~350ms on MSYS/Windows).
+  local lf="$1" line=""
   [ -f "$lf" ] || return 0
-  head -1 "$lf" 2>/dev/null || true
+  { read -r line < "$lf"; } 2>/dev/null || true
+  printf '%s\n' "$line"
 }
 
 # ── commands ─────────────────────────────────────────────────────────────────
+# NOTE: path validation and sha1 hashing are PURE functions of the input and are
+# performed by the dispatcher BEFORE entering with_meta_lock — holding the global
+# meta-lock across a ~420ms sha1sum spawn (MSYS) serialized all writers and made
+# the concurrent_write stress test time out. The _cmd_* handlers below receive the
+# already-computed lockfile path ($2) and run only the LOCK_DIR mutation, which is
+# the sole part needing serialization. (Argent cycle 002.)
 _cmd_acquire() {
-  local path="$1"
-  validate_path "$path"
-  ensure_dirs
-  local lf="${LOCK_DIR}/$(sha1_of "$path").lock"
+  local path="$1" lf="$2"
   local now
   now=$(now_epoch)
 
@@ -179,10 +225,11 @@ _cmd_acquire() {
     return 0
   fi
 
-  # Lockfile already exists — examine age, not PID
-  local existing
-  existing=$(read_lockfile "$lf")
-  if [ -z "$existing" ]; then
+  # Lockfile already exists — examine age, not PID. Read fields with a builtin
+  # (no head/awk spawns inside the critical section).
+  local epid="" eepoch="" erest=""
+  { read -r epid eepoch erest < "$lf"; } 2>/dev/null || true
+  if [ -z "$eepoch" ]; then
     # Empty/unreadable; treat as stale, clean and retry once
     rm -f "$lf"
     if (set -o noclobber; printf '%s %s %s\n' "$$" "$now" "$path" > "$lf") 2>/dev/null; then
@@ -191,11 +238,9 @@ _cmd_acquire() {
     return 75
   fi
 
-  local eepoch
-  eepoch=$(printf '%s' "$existing" | awk '{print $2}')
   # Numeric sanity (corrupt lockfile → treat as stale)
   case "$eepoch" in
-    ''|*[!0-9]*) rm -f "$lf"
+    *[!0-9]*) rm -f "$lf"
                  (set -o noclobber; printf '%s %s %s\n' "$$" "$now" "$path" > "$lf") 2>/dev/null && return 0
                  return 75 ;;
   esac
@@ -215,10 +260,7 @@ _cmd_acquire() {
 }
 
 _cmd_release() {
-  local path="$1"
-  validate_path "$path"
-  ensure_dirs
-  local lf="${LOCK_DIR}/$(sha1_of "$path").lock"
+  local path="$1" lf="$2"
   # Unconditional remove — cross-process release is allowed by design
   # (acquire and release are typically separate bash invocations from the
   # same skill; PID-matching would never succeed). See header comment.
@@ -272,10 +314,7 @@ _cmd_clear_stale() {
 }
 
 _cmd_peek() {
-  local path="$1"
-  validate_path "$path"
-  ensure_dirs
-  local lf="${LOCK_DIR}/$(sha1_of "$path").lock"
+  local path="$1" lf="$2"
   if [ ! -f "$lf" ]; then
     echo "unheld"
     return 0
@@ -315,14 +354,21 @@ done
 
 [ -n "$CMD" ] || die "no command given"
 
+# Validate (die propagates — NOT run in a subshell) and compute the lockfile path
+# BEFORE taking the meta-lock, so the ~420ms sha1sum spawn stays out of the
+# critical section. (Argent cycle 002.)
 case "$CMD" in
   acquire)
     [ ${#ARGS[@]} -ge 1 ] || die "acquire needs a path"
-    with_meta_lock _cmd_acquire "${ARGS[0]}"
+    validate_path "${ARGS[0]}"
+    LF="${LOCK_DIR}/$(sha1_of "${ARGS[0]}").lock"
+    with_meta_lock _cmd_acquire "${ARGS[0]}" "$LF"
     ;;
   release)
     [ ${#ARGS[@]} -ge 1 ] || die "release needs a path"
-    with_meta_lock _cmd_release "${ARGS[0]}"
+    validate_path "${ARGS[0]}"
+    LF="${LOCK_DIR}/$(sha1_of "${ARGS[0]}").lock"
+    with_meta_lock _cmd_release "${ARGS[0]}" "$LF"
     ;;
   list)
     with_meta_lock _cmd_list
@@ -333,7 +379,9 @@ case "$CMD" in
     ;;
   peek)
     [ ${#ARGS[@]} -ge 1 ] || die "peek needs a path"
-    with_meta_lock _cmd_peek "${ARGS[0]}"
+    validate_path "${ARGS[0]}"
+    LF="${LOCK_DIR}/$(sha1_of "${ARGS[0]}").lock"
+    with_meta_lock _cmd_peek "${ARGS[0]}" "$LF"
     ;;
   *)
     die "unknown command: $CMD (try acquire|release|list|clear-stale|peek)"

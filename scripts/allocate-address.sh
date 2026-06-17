@@ -31,9 +31,13 @@ mkdir -p "$(dirname "$COUNTER_FILE")" || {
   exit 2
 }
 
-# Acquire exclusive lock with 5-second timeout. Release automatically on scope exit.
-exec 9>"$LOCK_FILE"
-if ! flock -x -w 5 9; then
+# Acquire exclusive lock with 5-second timeout. Released automatically when this
+# process exits (portable_lock_acquire owns its fd/lockfile + EXIT-trap release).
+# flock(1) is used where present; a noclobber-file spin-lock substitutes on
+# MSYS/git-bash where flock(1) is absent. See scripts/portable-flock.sh.
+# shellcheck source=scripts/portable-flock.sh
+. "${BASH_SOURCE[0]%/*}/portable-flock.sh"
+if ! portable_lock_acquire "$LOCK_FILE" 5; then
   echo "ERR: could not acquire address allocator lock within 5s" >&2
   exit 1
 fi

@@ -143,7 +143,12 @@ RC_NL=$( (wl acquire $'wiki/concepts/Foo\nbar.md' >/dev/null 2>&1); echo $? )
 assert_eq "acquire newline path rejected" "4" "$RC_NL"
 
 # ── path validation: carriage return rejected (v1.7.2; closes audit M4) ──────
-RC_CR=$( (wl acquire $'wiki/concepts/Foo\rbar.md' >/dev/null 2>&1); echo $? )
+# Capture rc WITHOUT a $(...) wrapper: on MSYS/git-bash, command substitution
+# strips CR (0x0d) from the child's argv, so the path would arrive as
+# "Foobar.md" and validate_path would have no CR to reject (false rc=0). Running
+# the subshell directly and reading $? preserves the CR on every platform.
+# (Argent cycle 002 / thread F2 — newline above survives $() so it stays as-is.)
+( wl acquire $'wiki/concepts/Foo\rbar.md' >/dev/null 2>&1 ); RC_CR=$?
 assert_eq "acquire carriage-return path rejected" "4" "$RC_CR"
 
 # ── stress: 10 unique paths all acquire cleanly ──────────────────────────────

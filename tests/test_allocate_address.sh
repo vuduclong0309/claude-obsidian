@@ -30,6 +30,9 @@ trap 'rm -rf "$TMP"' EXIT
 
 mkdir -p "$TMP/scripts" "$TMP/wiki"
 cp "$ALLOC" "$TMP/scripts/allocate-address.sh"
+# allocate-address.sh sources its sibling portable-flock.sh; copy it too so the
+# `source` resolves inside this throwaway sandbox (cycle 002 / thread F2).
+cp "$VAULT_ROOT/scripts/portable-flock.sh" "$TMP/scripts/portable-flock.sh"
 chmod +x "$TMP/scripts/allocate-address.sh"
 cd "$TMP"
 

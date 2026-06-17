@@ -13,6 +13,16 @@ higher-leverage. Test command on this box: `bash bin/run-tests.sh` (no `make`).
 ---
 <!-- newest cycle entries are prepended directly below this line -->
 
+## Cycle 002 — 2026-06-17 — slice: cross-platform script portability (bash concurrency-lock layer)
+- Audit: docs/audits/argent-cycle-002.md (score before: 88)
+- Finding: HIGH scripts/{wiki-lock.sh:156,allocate-address.sh:36} — `flock -x -w 5 9` is POSIX-only; `flock: command not found` on MSYS breaks 3 tests (test_wiki_lock, test_concurrent_write, test_allocate_address). Closing it exposed two latent perf cliffs (validate_path python3 ~0.5s + sha1_of ~0.42s sha1sum held INSIDE the meta-lock) that timed out concurrent_write on Windows process-spawn costs.
+- Hypothesis: 88→~97 because closing F2 (all 3 flock-family tests) drops failing count 4→1, no regression
+- Action: new scripts/portable-flock.sh (flock(1) where present, else noclobber-FILE spin-lock w/ EXIT-trap release + 30s stale-reap; builtins-only contended path). wiki-lock.sh: meta-lock swap + moved pure validate_path/sha1_of OUT of the meta-lock (dispatcher precomputes lockfile path, passes as $2) so the critical section is sub-ms; validate_path fast-path skips python3 when no symlink ancestor (rigorous check unchanged); now_epoch→printf builtin, read_lockfile/parse→builtin read, sha1_of awk→${out%% *}, dirname→param-expansion, ensure_dirs [-d] guard. allocate-address.sh: helper swap. test_allocate_address.sh: copy portable-flock.sh into sandbox. test_wiki_lock.sh:146: CR-path assertion captured $? directly (MSYS strips CR in $() — verified by od) instead of via $(); validate_path itself was correct. | files: scripts/portable-flock.sh(new), scripts/wiki-lock.sh, scripts/allocate-address.sh, tests/test_allocate_address.sh, tests/test_wiki_lock.sh, docs/audits/argent-cycle-002.md
+- Verify: score after 96.5 (Δ+8.5) | tests: 8 passed/1 failed (was 5/4); concurrent_write hang→reliable ~51-58s over 7 runs (~2× margin under 120s budget); no previously-green test red | verifier: 0 BLOCKER / 0 HIGH → SHIP (1 MEDIUM + 4 LOW, all already in open threads; symlink fast-path + lock release/mutual-exclusion confirmed sound)
+- Result: KEPT @ <sha>
+- Open threads: F3 (test_boundary_score symlink-privilege, last red); M(002-1) reconcile dragonscale-guide.md:53-65 flock-as-hard-prereq vs new fallback; L(002-2) sha1_of still spawns sha1sum/op (dominant residual cost, pure-bash hash would remove it — changes lockfile naming); L(002-1) no hermetic test_portable_flock.sh; L(002-3) document _PORTABLE_LOCK_STALE_SEC in consumers; (c001) M1 portable_lock.py:67 no LOCK_EX timeout; M2 no test_portable_lock.py
+- Dead ends: mkdir-based portable lock (`mkdir <path>.lockd`) — livelocks concurrent_write on Windows deferred-directory-delete under ~500 create/delete cycles. Use noclobber-FILE, not mkdir-dir, for churning Windows locks. Do not retry mkdir-lock.
+
 ## Cycle 001 — 2026-06-16 — slice: cross-platform script portability
 - Audit: docs/audits/argent-cycle-001.md (score before: 72)
 - Finding: HIGH scripts/{tiling-check.py:30,bm25-index.py:49,rerank.py:45} — `import fcntl` is POSIX-only, ModuleNotFoundError on Windows breaks 3 tests
