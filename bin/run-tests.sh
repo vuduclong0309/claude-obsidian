@@ -23,10 +23,22 @@ TESTS=(
   "python3 tests/test_contextual_prefix.py"
 )
 
+# Per-test timeout so a hanging/deadlocked test fails fast instead of stalling
+# the whole suite (and, under the headless loop, the entire cycle). Override with
+# TEST_TIMEOUT=<seconds>. Falls back to no timeout if `timeout` is unavailable.
+TEST_TIMEOUT="${TEST_TIMEOUT:-120}"
+TIMEOUT_BIN="$(command -v timeout || true)"
+
 pass=0; fail=0; failed=()
 for t in "${TESTS[@]}"; do
   echo "=== $t ==="
-  if $t; then pass=$((pass+1)); else fail=$((fail+1)); failed+=("$t"); fi
+  if [ -n "$TIMEOUT_BIN" ]; then "$TIMEOUT_BIN" "$TEST_TIMEOUT" $t; rc=$?; else $t; rc=$?; fi
+  if [ "$rc" -eq 0 ]; then
+    pass=$((pass+1))
+  else
+    [ "$rc" -eq 124 ] && echo "  !! TIMEOUT after ${TEST_TIMEOUT}s — counted as FAIL"
+    fail=$((fail+1)); failed+=("$t")
+  fi
 done
 
 echo ""
