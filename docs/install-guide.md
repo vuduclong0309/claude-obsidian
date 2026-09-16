@@ -57,8 +57,8 @@ not convert the product repository into a user vault.
 The installer defaults to a no-write preview for Codex, OpenCode, and Gemini:
 
 ```bash
-bash bin/setup-multi-agent.sh
-bash bin/setup-multi-agent.sh --apply
+bash scripts/setup-multi-agent.sh
+bash scripts/setup-multi-agent.sh --apply
 ```
 
 It links each canonical `skills/<name>/` directory into the host's direct
@@ -67,15 +67,22 @@ when absent; an existing skill or link is never replaced. Check readiness
 without writing:
 
 ```bash
-bash bin/setup-multi-agent.sh --check
+bash scripts/setup-multi-agent.sh --check
 ```
 
 Cursor and Windsurf use workspace-local discovery and require an explicit
 workspace:
 
 ```bash
-bash bin/setup-multi-agent.sh --host cursor --host windsurf \
+bash scripts/setup-multi-agent.sh --host cursor --host windsurf \
   --workspace <workspace> --apply
+```
+
+ZCode is opt-in and user-level (no `--workspace` needed):
+
+```bash
+bash scripts/setup-multi-agent.sh --host zcode
+bash scripts/setup-multi-agent.sh --host zcode --apply
 ```
 
 You can also create equivalent per-skill links manually. For each `<name>` under
@@ -85,6 +92,7 @@ the product's `skills/` directory, link that directory at:
 Codex:     ~/.agents/skills/<name>          -> <product-repository>/skills/<name>
 OpenCode:  ~/.config/opencode/skills/<name> -> <product-repository>/skills/<name>
 Gemini:    ~/.gemini/skills/<name>          -> <product-repository>/skills/<name>
+ZCode:     ~/.zcode/skills/<name>           -> <product-repository>/skills/<name>
 Cursor:    <workspace>/.cursor/skills/<name>   -> <product-repository>/skills/<name>
 Windsurf:  <workspace>/.windsurf/skills/<name> -> <product-repository>/skills/<name>
 ```
@@ -182,9 +190,9 @@ bash scripts/detect-transport.sh --peek --vault <vault>
 Optional extensions are explicit and vault-scoped:
 
 ```bash
-bash bin/setup-mode.sh --vault <vault>
-bash bin/setup-retrieve.sh --vault <vault>
-bash bin/setup-dragonscale.sh --vault <vault>
+bash scripts/setup-mode.sh --vault <vault>
+bash scripts/setup-retrieve.sh --vault <vault>
+bash scripts/setup-dragonscale.sh --vault <vault>
 ```
 
 Read each script's preview before applying. Retrieval may use local BM25 alone;
