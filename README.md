@@ -13,7 +13,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT license"></a>
   <a href="https://agentskills.io"><img src="https://img.shields.io/badge/Agent%20Skills-compatible-2563eb" alt="Agent Skills compatible"></a>
   <a href="https://code.claude.com/docs/en/plugins"><img src="https://img.shields.io/badge/Claude%20Code-plugin-7c3aed" alt="Claude Code plugin"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/release-v2.1.1-d97745" alt="Release v2.1.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/release-v2.2.0-d97745" alt="Release v2.2.0"></a>
 </p>
 
 <p align="center">
@@ -137,12 +137,12 @@ Then place a source in `inbox/` and invoke
 `/claude-obsidian:wiki-ingest`. Save an answer explicitly with
 `/claude-obsidian:save`; ask the vault with `/claude-obsidian:wiki-query`.
 
-For Codex, OpenCode, or Gemini, preview and then apply the portable skill links
-from the product checkout:
+For Codex, OpenCode, Gemini, or ZCode, preview and then apply the portable
+skill links from the product checkout:
 
 ```bash
-bash bin/setup-multi-agent.sh --host codex
-bash bin/setup-multi-agent.sh --host codex --apply
+bash scripts/setup-multi-agent.sh --host codex
+bash scripts/setup-multi-agent.sh --host codex --apply
 ```
 
 Cursor and Windsurf use workspace-local skill discovery. Marketplace setup,
@@ -268,7 +268,7 @@ The wrapper is `python3 scripts/claude-obsidian.py`.
 | `transaction inspect BUNDLE --vault PATH` | Validate a write bundle without mutation |
 | `transaction apply BUNDLE --vault PATH --approved-plan-sha256 HASH` | Apply one inspected, recoverable operation |
 | `transaction recover --vault PATH [--force-stale-lock]` | Restore an interrupted operation |
-| `lint --vault PATH [--as-of YYYY-MM-DD]` | Emit findings deterministic for the declared UTC date |
+| `lint --vault PATH [--as-of YYYY-MM-DD] [--exclude GLOB]...` | Emit findings deterministic for the declared UTC date |
 | `contracts --verify --vault PATH` | Execute capability readiness contracts |
 | `capture plan --vault PATH [SOURCE ...]` | Run a local capture preflight without writes |
 | `capture apply --vault PATH [SOURCE ...]` | Plan or create immutable content-addressed copies |
@@ -345,6 +345,12 @@ remain yours.
   without it
 - Bash for setup, optional extensions, and shell test suites
 - Git only for development, releases, or an explicit knowledge checkpoint
+- A current Claude Code release for the Claude Code plugin path: the
+  exec-form `args` command hook and the `compact` `SessionStart` matcher used
+  by `hooks/hooks.json` need it (see the
+  [Claude Code hooks contract](https://code.claude.com/docs/en/hooks)). Other
+  supported hosts and the portable CLI have no Claude Code version
+  dependency.
 
 CI exercises Linux and macOS, plus a native-Windows smoke job for the portable
 surface. On native Windows (including Git Bash), read-only inspection and
